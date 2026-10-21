@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Previsão de Churn Bancário</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b2330;--mut:#667085;--bd:#e3e6eb;--ac:#2563eb;--ok:#16a34a;--bad:#dc2626;--track:#e9ecf1}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141b;--card:#171e28;--tx:#e8ecf2;--mut:#98a2b3;--bd:#2a3340;--ac:#5b8def;--ok:#34d399;--bad:#f87171;--track:#253041}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:880px;margin:0 auto;padding:32px 16px 48px}
+h1{font-size:1.7rem;margin:0 0 4px}p.sub{color:var(--mut);margin:0 0 24px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:20px}
+label{display:block;font-size:.85rem;color:var(--mut);margin:14px 0 4px}label:first-child{margin-top:0}
+input,select{width:100%;padding:10px 12px;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px}
+input:focus,select:focus{outline:2px solid var(--ac);outline-offset:-1px}
+button{margin-top:20px;width:100%;padding:12px;font:inherit;font-weight:600;color:#fff;background:var(--ac);border:0;border-radius:8px;cursor:pointer}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#prob{font-size:3rem;font-weight:700;line-height:1}.verdict{display:inline-block;margin:10px 0;padding:4px 12px;border-radius:99px;font-weight:600;font-size:.9rem}
+.v-bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}.v-ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.bar{position:relative;height:12px;background:var(--track);border-radius:99px;margin:14px 0 6px}.fill{height:100%;border-radius:99px;background:var(--ac);width:0;transition:width .4s}
+.thr{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--tx)}.small{font-size:.8rem;color:var(--mut)}
+.c{display:flex;align-items:center;gap:8px;font-size:.85rem;margin:6px 0}.c span:first-child{width:120px;flex:none}.cb{flex:1;display:flex;height:8px;background:var(--track);border-radius:4px;position:relative}
+.cb i{position:absolute;top:0;bottom:0;border-radius:4px}.mid{position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--mut)}
+.met{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;margin-top:12px}.met b{display:block;font-size:1.15rem}.met span{font-size:.75rem;color:var(--mut)}
+@media(max-width:720px){.met{grid-template-columns:repeat(3,1fr)}}
+footer{margin-top:24px}h2{font-size:1rem;margin:0 0 4px}
+</style>
+</head>
+<body>
+<main>
+<h1>Previsão de evasão bancária (churn)</h1>
+<p class="sub">Preencha o perfil do cliente e veja a probabilidade de ele deixar o banco. Modelo: Regressão Logística treinada no notebook do projeto.</p>
+<div class="grid">
+<div class="card">
+<label for="CreditScore">Credit Score (350–850)</label><input id="CreditScore" type="number" min="350" max="850" value="650">
+<div class="row"><div><label for="Geography">País</label><select id="Geography"><option value="France">França</option><option value="Germany">Alemanha</option><option value="Spain">Espanha</option></select></div>
+<div><label for="Gender">Gênero</label><select id="Gender"><option value="Female">Feminino</option><option value="Male">Masculino</option></select></div></div>
+<label for="Age">Idade</label><input id="Age" type="number" min="18" max="92" value="40">
+<label for="Balance">Saldo da conta</label><input id="Balance" type="number" min="0" step="100" value="80000">
+<label for="EstimatedSalary">Salário estimado</label><input id="EstimatedSalary" type="number" min="0" step="100" value="100000">
+<button id="go">Prever churn</button>
+</div>
+<div class="card" aria-live="polite">
+<div class="small">Probabilidade de churn</div><div id="prob">—</div>
+<div id="verdict" class="verdict v-ok" hidden></div>
+<div class="bar"><div class="fill" id="fill"></div><div class="thr" id="thr" title="Threshold"></div></div>
+<div class="small">A linha marca o threshold de <span id="thv"></span>%: acima dele o cliente é classificado como churn.</div>
+<h2 style="margin-top:20px">O que pesou na previsão</h2>
+<div id="contrib" class="small">Clique em “Prever churn”.</div>
+</div>
+</div>
+<footer class="card">
+<h2>Desempenho no conjunto de teste</h2>
+<div class="met" id="met"></div>
+<p class="small" style="margin-top:14px">O threshold de 0,3 prioriza o recall: o modelo pega quase todos os clientes que sairiam, ao custo de muitos falsos positivos (baixa precisão). Dados: <a href="https://github.com/cassiusf/datasets/raw/refs/heads/main/desafios/Churn_Dataset.csv" style="color:var(--ac)">Churn_Dataset.csv</a>. Projeto acadêmico, não use para decisões reais.</p>
+</footer>
+</main>
+<script>
+const M={"center":[651.5,37.0,97145.94,100127.245],"scale":[132.25,12.0,127477.6925,98190.42000000001],"coef":{"CreditScore":-0.08533762843732366,"Age":0.912827460987788,"Balance":0.3738657074867791,"EstimatedSalary":0.03522869275077669,"Geography_Germany":0.7411598978060449,"Geography_Spain":0.08908111442570994,"Gender_Male":-0.584497315084863},"intercept":-0.20902733157176498,"threshold":0.3,"metrics":{"auc":0.7555146454518559,"n":2000,"acc":0.46,"prec":0.2603800140745954,"rec":0.9273182957393483,"f1":0.4065934065934066}};
+const NUM=["CreditScore","Age","Balance","EstimatedSalary"];
+const LBL={CreditScore:"Credit Score",Age:"Idade",Balance:"Saldo",EstimatedSalary:"Salário",Geography:"País",Gender:"Gênero"};
+const $=id=>document.getElementById(id);
+function predict(v){
+  const t={};NUM.forEach((k,i)=>t[k]=M.coef[k]*((v[k]-M.center[i])/M.scale[i]));
+  t.Geography=(v.Geography==="Germany"?M.coef.Geography_Germany:0)+(v.Geography==="Spain"?M.coef.Geography_Spain:0);
+  t.Gender=v.Gender==="Male"?M.coef.Gender_Male:0;
+  const z=M.intercept+Object.values(t).reduce((a,b)=>a+b,0);
+  return{p:1/(1+Math.exp(-z)),t};
+}
+function run(){
+  const v={Geography:$("Geography").value,Gender:$("Gender").value};
+  for(const k of NUM)v[k]=parseFloat($(k).value);
+  if(NUM.some(k=>isNaN(v[k])))return;
+  const {p,t}=predict(v),churn=p>=M.threshold;
+  $("prob").textContent=(p*100).toFixed(1)+"%";
+  const vd=$("verdict");vd.hidden=false;vd.className="verdict "+(churn?"v-bad":"v-ok");
+  vd.textContent=churn?"Risco de churn":"Provavelmente permanece";
+  $("fill").style.width=(p*100)+"%";$("fill").style.background=churn?"var(--bad)":"var(--ok)";
+  const mx=Math.max(1,...Object.values(t).map(Math.abs));
+  $("contrib").innerHTML=Object.entries(t).map(([k,x])=>{const w=Math.abs(x)/mx*50;
+    return `<div class="c"><span>${LBL[k]}</span><div class="cb"><div class="mid"></div><i style="${x>=0?"left:50%":"right:50%"};width:${w}%;background:var(${x>=0?"--bad":"--ok"})"></i></div></div>`}).join("")
+    +'<div class="small" style="margin-top:8px">Vermelho aumenta o risco; verde reduz.</div>';
+}
+$("thr").style.left=(M.threshold*100)+"%";$("thv").textContent=M.threshold*100;
+const m=M.metrics;$("met").innerHTML=[["Acurácia",m.acc],["Precision",m.prec],["Recall",m.rec],["F1",m.f1],["ROC AUC",m.auc]].map(([n,x])=>`<div><b>${(x*100).toFixed(0)}%</b><span>${n}</span></div>`).join("");
+$("go").onclick=run;document.querySelectorAll("input,select").forEach(e=>e.addEventListener("input",run));run();
+</script>
+</body>
+</html>
