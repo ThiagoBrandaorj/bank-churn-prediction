@@ -3,6 +3,7 @@
 Repository for a notebook from a Machine Learning class (IBMEC).
 
 Projeto de classificação que prevê a **evasão de clientes (churn)** em um banco, usando o [Churn Dataset](https://github.com/cassiusf/datasets/raw/refs/heads/main/desafios/Churn_Dataset.csv), com foco em regressão logística como modelo benchmark para um problema de classificação desbalanceado.
+O projeto está em produção e possui uma interface gráfica disponível em: https://thiagobrandaorj.github.io/bank-churn-prediction/
 
 ## Arquivo
 
